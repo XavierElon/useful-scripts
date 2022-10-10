@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - npm install
+      - echo "Installing Expo cli"
+      - npm install -g eas-cli
+      - npx expo login --non-interactive -u ${EXPO_USERNAME} -p ${EXPO_CLI_PASSWORD}
+      
+  build:
+    commands:
+      - chmod u+x versioning.sh
+      - VERSION_NUMBER=$(aws ssm get-parameter --name "PARAMETER_STORE_VARIABLE_NUMBER" --region 'us-east-1' | sed -n -e 's/.*Value\"[^\"]*//p' | sed -n -e 's/[\"\,]//gp')
+      - echo $$VERSION_NUMBER
+      - ./versioning.sh patch
+      - APK=appname-$VERSION_NUMBER.apk
+      - echo $APK
+      - echo 'Building APK'
+      - ls -alt
+      - eas build -p android --profile development --non-interactive --wait
+      - sleep 180
+      - touch output.txt
+      - eas build:view > output.txt
+      - cat output.txt
+      - APK_URL=$(sed -n '13p' < output.txt)
+      - echo $APK_URL
+      - APK_URL=$(echo $APK_URL | cut -f 2 -d " ")
+      - echo $APK_URL
+      - wget $APK_URL -P ./ -O $APK
+      - ls -alt
+      - aws s3 cp ./$APK s3_URI
