@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - npm install
+  build:
+    commands:
+      - ls -alt
+      - chmod u+x ./scripts/versioning.sh
+      - VERSION_NUMBER=$(aws ssm get-parameter --name "PARAMETER_STORE_VARIABLE_NUMBER" --region 'us-east-1' | sed -n -e 's/.*Value\"[^\"]*//p' | sed -n -e 's/[\"\,]//gp')
+      - echo $VERSION_NUMBER
+      - ./scripts/versioning.sh patch
+      - npm run build
+      - npm run dev-env-setup
+      - cat ./dist/.env
+      - ls -alt
+      - FOLDER_NAME=appname-$VERSION_NUMBER
+      - mv ./dist ./$FOLDER_NAME
+      - ls -alt ./$FOLDER_NAME
+      - aws s3 cp --recursive ./$FOLDER_NAME s3_uri
+      - scp -oStrictHostKeyChecking=no -i "./eastcoast.pem" ./dist  ec2-user@:/home/ec2-user/dev
+  post_build:
+    commands:
+artifacts:
+  files:
+    - '**/*'
+  secondary-artifacts:
+    opmed_service_build:
+      files:
+        - '**/*'
+      name: appname-$VERSION_NUMBER
