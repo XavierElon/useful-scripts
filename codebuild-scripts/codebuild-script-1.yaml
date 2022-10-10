@@ -1,0 +1,39 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - npm install
+      - yum install rsync -y
+  build:
+    commands:
+      - ls -alt
+      - ls -alt ./env_configs
+      - cp ./env_configs/.env.local ./.env
+      - npm run build-patient
+      - make
+      - ls -alt
+      - chmod u+x versioning.sh
+      - VERSION_NUMBER=$(aws ssm get-parameter --name "PARAMETER_STORE_VARIABLE_NAME" --region 'us-east-1' | sed -n -e 's/.*Value\"[^\"]*//p' | sed -n -e 's/[\"\,]//gp')
+      - ./versioning.sh patch
+      - FOLDER_NAME=appname-$VERSION_NUMBER
+      - echo $FOLDER_NAME
+      - mkdir $FOLDER_NAME
+      - mv software.tar.gz $VERSION_NUMBER-software.tar.gz
+      - ls -alt
+      - mv $VERSION_NUMBER-software.tar.gz .env ./$FOLDER_NAME
+      - ls -alt ./$FOLDER_NAME
+      - aws s3 cp --recursive ./$FOLDER_NAME S3_URI
+      #- ssh -oStrictHostKeyChecking=no -i "./eastcoast.pem" ec2-ip mkdir /home/ec2-user/app/$FOLDER_NAME
+ 
+  post_build:
+    commands:
+      # - command
+artifacts:
+  files:
+    - '**/*'
+  secondary-artifacts:
+    wickrbot_build:
+      files:
+        - '**/*'
+      name: appname-$FOLDER_NAME
